@@ -1055,7 +1055,12 @@ trait Printers
       }
 
       def printTargDef(arg: TypeDef, isMember: Boolean = false): Buffer = {
-        this += arg.name
+        if (arg.symbol.flags.isCovariant) {
+          this += highlightValDef("+", color)
+        } else if (arg.symbol.flags.isContravariant) {
+          this += highlightValDef("-", color)
+        }
+        this += highlightTypeDef(arg.name, color)
         arg.rhs match {
           case IsTypeBoundsTree(rhs) => printBoundsTree(rhs)
           case rhs @ WildcardTypeTree() =>
