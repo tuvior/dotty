@@ -534,10 +534,11 @@ trait Printers
               printTypeTree(parent)
             case IsTerm(Term.TypeApply(fun, targs)) =>
               printParent(fun)
-              inSquare(printTypeOrBoundsTrees(targs, ", "))
+              //inSquare(printTypeOrBoundsTrees(targs, ", "))
             case IsTerm(Term.Apply(fun, args)) =>
               printParent(fun)
-              inParens(printTrees(args, ", "))
+              if (args.length > 0)
+                inParens(printTrees(args, ", "))
             case IsTerm(Term.Select(Term.New(tpt), _)) =>
               printTypeTree(tpt)
             case IsTerm(parent) =>
@@ -1322,8 +1323,10 @@ trait Printers
           inBlock(printTypeCases(cases, lineBreak()))
 
         case TypeTree.ByName(result) =>
-          this += highlightTypeDef("=> ", color)
-          printTypeTree(result)
+          inParens {
+            this += highlightTypeDef("=> ", color)
+            printTypeTree(result)
+          }
 
         case TypeTree.LambdaTypeTree(tparams, body) =>
           printTargsDefs(tparams)
@@ -1490,7 +1493,9 @@ trait Printers
         val Annotation(ref, args) = annot
         this += "@"
         printTypeTree(ref)
-        inParens(printTrees(args, ", "))
+        if (args.length > 0)
+          inParens(printTrees(args, ", "))
+        else this
       }
 
       def printDefAnnotations(definition: Definition): Buffer = {
