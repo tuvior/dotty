@@ -620,6 +620,7 @@ trait Printers
 
           printProtectedOrPrivate(vdef)
 
+          if (flags.isFinal) this += highlightKeyword("final ", color)
           if (flags.isLazy) this += highlightKeyword("lazy ", color)
           if (vdef.symbol.flags.isMutable) this += highlightKeyword("var ", color)
           else this += highlightKeyword("val ", color)
@@ -668,6 +669,8 @@ trait Printers
           if (flags.isOverride) this += highlightKeyword("override ", color)
 
           printProtectedOrPrivate(ddef)
+
+          if (flags.isFinal) this += highlightKeyword("final ", color)
 
           this += highlightKeyword("def ", color) += highlightValDef((if (isConstructor) "this" else name), color)
           printTargsDefs(targs)
