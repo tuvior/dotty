@@ -620,7 +620,7 @@ trait Printers
 
           printProtectedOrPrivate(vdef)
 
-          if (flags.isFinal) this += highlightKeyword("final ", color)
+          if (flags.isFinal && !flags.isObject) this += highlightKeyword("final ", color)
           if (flags.isLazy) this += highlightKeyword("lazy ", color)
           if (vdef.symbol.flags.isMutable) this += highlightKeyword("var ", color)
           else this += highlightKeyword("val ", color)
@@ -670,7 +670,7 @@ trait Printers
 
           printProtectedOrPrivate(ddef)
 
-          if (flags.isFinal) this += highlightKeyword("final ", color)
+          if (flags.isFinal && !flags.isObject) this += highlightKeyword("final ", color)
 
           this += highlightKeyword("def ", color) += highlightValDef((if (isConstructor) "this" else name), color)
           printTargsDefs(targs)
@@ -1555,6 +1555,7 @@ trait Printers
             this += ": "
             printType(info)
         }
+
         def printSeparated(list: List[(String, TypeOrBounds)]): Unit = list match {
           case Nil =>
           case (name, info) :: Nil =>
