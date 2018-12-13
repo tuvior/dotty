@@ -497,7 +497,7 @@ trait Printers
           this += "."
           printImportSelectors(selectors)
 
-        case IsClassDef(cdef @ ClassDef(name, DefDef(_, _, argss, _, _), parents, self, stats)) =>
+        case IsClassDef(cdef @ ClassDef(name, DefDef(_, targs, argss, _, _), parents, self, stats)) =>
           printDefAnnotations(cdef)
 
           val flags = cdef.symbol.flags
@@ -514,7 +514,7 @@ trait Printers
           else if (flags.isAbstract) this += highlightKeyword("abstract class ", color) += highlightTypeDef(name, color)
           else this += highlightKeyword("class ", color) += highlightTypeDef(name, color)
 
-          val typeParams = stats.collect { case IsTypeDef(targ) => targ  }.filter(_.symbol.isTypeParam)
+          val typeParams = stats.collect { case IsTypeDef(targ) => targ  }.filter(_.symbol.isTypeParam).zip(targs)
           if (!flags.isObject) {
             printTargsDefs(typeParams)
             val it = argss.iterator
@@ -530,15 +530,19 @@ trait Printers
           if (parents1.nonEmpty)
             this += highlightKeyword(" extends ", color)
 
-          def printParent(parent: TermOrTypeTree): Unit = parent match {
+          def printParent(parent: TermOrTypeTree, needEmptyParens: Boolean = false): Unit = parent match {
             case IsTypeTree(parent) =>
               printTypeTree(parent)
             case IsTerm(Term.TypeApply(fun, targs)) =>
               printParent(fun)
               //inSquare(printTypeOrBoundsTrees(targs, ", "))
+            case IsTerm(Term.Apply(fun@Term.Apply(_,_), args)) =>
+              printParent(fun, true)
+              if (args.length > 0 || needEmptyParens)
+                inParens(printTrees(args, ", "))
             case IsTerm(Term.Apply(fun, args)) =>
               printParent(fun)
-              if (args.length > 0)
+              if (args.length > 0 || needEmptyParens)
                 inParens(printTrees(args, ", "))
             case IsTerm(Term.Select(Term.New(tpt), _)) =>
               printTypeTree(tpt)
@@ -611,7 +615,7 @@ trait Printers
         case IsTypeDef(tdef @ TypeDef(name, rhs)) =>
           printDefAnnotations(tdef)
           this += highlightKeyword("type ", color)
-          printTargDef(tdef, isMember = true)
+          printTargDef((tdef, tdef), isMember = true)
 
         case IsValDef(vdef @ ValDef(name, tpt, rhs)) =>
           printDefAnnotations(vdef)
@@ -675,7 +679,7 @@ trait Printers
           if (flags.isFinal && !flags.isObject) this += highlightKeyword("final ", color)
 
           this += highlightKeyword("def ", color) += highlightValDef((if (isConstructor) "this" else name), color)
-          printTargsDefs(targs)
+          printTargsDefs(targs.zip(targs))
           val it = argss.iterator
           while (it.hasNext)
             printArgsDefs(it.next())
@@ -1040,9 +1044,9 @@ trait Printers
         this
       }
 
-      def printTargsDefs(targs: List[TypeDef]): Unit = {
+      def printTargsDefs(targs: List[(TypeDef, TypeDef)]): Unit = {
         if (!targs.isEmpty) {
-          def printSeparated(list: List[TypeDef]): Unit = list match {
+          def printSeparated(list: List[(TypeDef, TypeDef)]): Unit = list match {
             case Nil =>
             case x :: Nil => printTargDef(x)
             case x :: xs =>
@@ -1055,14 +1059,16 @@ trait Printers
         }
       }
 
-      def printTargDef(arg: TypeDef, isMember: Boolean = false): Buffer = {
-        if (arg.symbol.flags.isCovariant) {
+      def printTargDef(arg: (TypeDef, TypeDef), isMember: Boolean = false): Buffer = {
+        val (argDef, argCons) = arg
+
+        if (argDef.symbol.flags.isCovariant) {
           this += highlightValDef("+", color)
-        } else if (arg.symbol.flags.isContravariant) {
+        } else if (argDef.symbol.flags.isContravariant) {
           this += highlightValDef("-", color)
         }
-        this += highlightTypeDef(arg.name, color)
-        arg.rhs match {
+        this += highlightTypeDef(argCons.name, color)
+        argCons.rhs match {
           case IsTypeBoundsTree(rhs) => printBoundsTree(rhs)
           case rhs @ WildcardTypeTree() =>
             printTypeOrBound(rhs.tpe)
@@ -1247,11 +1253,9 @@ trait Printers
       }
 
       def printTypeOrBoundsTree(tpt: TypeOrBoundsTree): Buffer = tpt match {
-        case TypeBoundsTree(lo, hi) =>
-          this += "_ >: "
-          printTypeTree(lo)
-          this += " <: "
-          printTypeTree(hi)
+        case IsTypeBoundsTree(tbt) =>
+          this += "_"
+          printBoundsTree(tbt)
         case tpt @ WildcardTypeTree() =>
           printTypeOrBound(tpt.tpe)
         case IsTypeTree(tpt) =>
@@ -1329,13 +1333,11 @@ trait Printers
           inBlock(printTypeCases(cases, lineBreak()))
 
         case TypeTree.ByName(result) =>
-          inParens {
-            this += highlightTypeDef("=> ", color)
-            printTypeTree(result)
-          }
+          this += highlightTypeDef("=> ", color)
+          printTypeTree(result)
 
         case TypeTree.LambdaTypeTree(tparams, body) =>
-          printTargsDefs(tparams)
+          printTargsDefs(tparams.zip(tparams))
           this += highlightTypeDef(" => ", color)
           printTypeOrBoundsTree(body)
 
@@ -1354,6 +1356,8 @@ trait Printers
       }
 
       def printTypeOrBound(tpe: TypeOrBounds): Buffer = tpe match {
+        case Types.IsUnboundedTypeBounds(_) =>
+          this += "_"
         case tpe@TypeBounds(lo, hi) =>
           this += "_ >: "
           printType(lo)
@@ -1692,6 +1696,13 @@ trait Printers
 
     // TODO Provide some of these in scala.tasty.Reflection.scala and implement them using checks on symbols for performance
     private object Types {
+
+      object IsUnboundedTypeBounds {
+        def unapply(ttb: TypeOrBounds)(implicit ctx: Context): Option[Boolean] = ttb match {
+          case TypeBounds(Type.TypeRef("Nothing", ScalaPackage()), Type.TypeRef("Any", ScalaPackage())) => Some(true)
+          case _ => None
+        }
+      }
 
       object JavaLangObject {
         def unapply(tpe: Type)(implicit ctx: Context): Boolean = tpe match {
