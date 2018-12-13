@@ -500,7 +500,6 @@ trait Printers
         case IsClassDef(cdef @ ClassDef(name, DefDef(_, _, argss, _, _), parents, self, stats)) =>
           printDefAnnotations(cdef)
 
-          val typeParams = stats.collect { case targ @ TypeDef(_, _) => targ } map(_.asInstanceOf[TypeDef])
           val flags = cdef.symbol.flags
           if (flags.isImplicit) this += highlightKeyword("implicit ", color)
           if (flags.isSealed) this += highlightKeyword("sealed ", color)
@@ -515,6 +514,7 @@ trait Printers
           else if (flags.isAbstract) this += highlightKeyword("abstract class ", color) += highlightTypeDef(name, color)
           else this += highlightKeyword("class ", color) += highlightTypeDef(name, color)
 
+          val typeParams = stats.collect { case IsTypeDef(targ) => targ  }.filter(_.symbol.isTypeParam)
           if (!flags.isObject) {
             printTargsDefs(typeParams)
             val it = argss.iterator
